@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 from database import DATABASE_NAME, initialize_database
 import engine
+import designs
 
 from tab_entry import LogTransactionTab
 from tab_sheet import InteractiveSheetTab
@@ -14,68 +15,83 @@ from tab_reconciliation import BankReconciliationTab
 from audit_engine import AuditEngine
 
 ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
 
 class ModernAccountingApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         initialize_database()
         
-        self.title("Financial Suite")
-        self.geometry("950x740")
-        self.current_profile_id = 1
+        self.title("Financial Suite HUD — Mark VII")
+        self.geometry("1020x780")
+        self.configure(fg_color=designs.BG_WINDOW)
         
+        self.current_profile_id = 1
         self._cache = {"ledger": None, "invoices": None}
         
-        self.top_bar = ctk.CTkFrame(self, fg_color="transparent")
-        self.top_bar.pack(pady=(10, 5), padx=20, fill="x")
+        self.top_bar = ctk.CTkFrame(self, fg_color=designs.BG_PANEL, height=55, corner_radius=8, border_color=designs.BORDER_COLOR, border_width=1)
+        self.top_bar.pack(pady=(15, 10), padx=20, fill="x")
+        self.top_bar.pack_propagate(False)
         
-        ctk.CTkLabel(self.top_bar, text="Company Profile:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
-        self.profile_menu = ctk.CTkOptionMenu(self.top_bar, values=self.get_profile_names(), command=self.switch_profile, width=180)
-        self.profile_menu.pack(side="left", padx=10)
+        profile_lbl = ctk.CTkLabel(self.top_bar, text="OPERATIONAL SCOPE:", font=ctk.CTkFont(family=designs.FONT_HUD_TITLE[0], size=designs.FONT_HUD_TITLE[1], weight=designs.FONT_HUD_TITLE[2]), text_color=designs.COLOR_ACCENT)
+        profile_lbl.pack(side="left", padx=(20, 5), pady=12)
+        
+        self.profile_menu = ctk.CTkOptionMenu(
+            self.top_bar, 
+            values=self.get_profile_names(), 
+            command=self.switch_profile, 
+            width=200,
+            font=ctk.CTkFont(family=designs.FONT_HUD_REGULAR[0], size=designs.FONT_HUD_REGULAR[1], weight=designs.FONT_HUD_REGULAR[2]),
+            **designs.OPTIONMENU_STYLE
+        )
+        self.profile_menu.pack(side="left", padx=10, pady=12)
         
         self.sync_accounts()
         self.invalidate_and_prime_cache()
 
-        # Fix: Setup the error indicator widget loop BEFORE loading the child frames
-        self.footer_bar = ctk.CTkFrame(self, height=30, fg_color="#1a1a1a", corner_radius=0)
+        self.footer_bar = ctk.CTkFrame(self, height=35, fg_color=designs.BG_SUBPANEL, corner_radius=0, border_color=designs.BORDER_COLOR, border_width=1)
         self.footer_bar.pack(fill="x", side="bottom", ipady=2)
         
         self.error_icon_lbl = ctk.CTkLabel(
             self.footer_bar, 
-            text="✅ No errors", 
-            font=ctk.CTkFont(weight="bold", size=12),
-            text_color="#40ff40", 
+            text="SYSTEM INTEGRITY: SECURE", 
+            font=ctk.CTkFont(family=designs.FONT_HUD_CONSOLE[0], size=designs.FONT_HUD_CONSOLE[1], weight=designs.FONT_HUD_CONSOLE[2]),
+            text_color=designs.COLOR_SUCCESS, 
             cursor="hand2"
         )
-        self.error_icon_lbl.pack(side="left", padx=20)
+        self.error_icon_lbl.pack(side="left", padx=20, pady=5)
         self.error_icon_lbl.bind("<Button-1>", lambda e: self.show_audit_console_popup())
         
         self.detected_errors = []
         
-        self.tabs = ctk.CTkTabview(self)
-        self.tabs.pack(padx=20, pady=5, fill="both", expand=True)
+        self.tabs = ctk.CTkTabview(
+            self,
+            **designs.TABVIEW_STYLE
+        )
+        self.tabs.pack(padx=20, pady=(5, 15), fill="both", expand=True)
+        
+
+        self.tabs._segmented_button.configure(font=ctk.CTkFont(family=designs.FONT_HUD_REGULAR[0], size=designs.FONT_HUD_REGULAR[1], weight=designs.FONT_HUD_REGULAR[2]))
         
         self.tab1 = LogTransactionTab(self.tabs.add("Log Transaction"), self)
-        self.tab1.pack(fill="both", expand=True)
+        self.tab1.pack(fill="both", expand=True, padx=10, pady=10)
         
         self.tab2 = InteractiveSheetTab(self.tabs.add("Interactive Sheet"), self)
-        self.tab2.pack(fill="both", expand=True)
+        self.tab2.pack(fill="both", expand=True, padx=10, pady=10)
         
         self.tab3 = ReportsDashboardTab(self.tabs.add("View Dashboard"), self)
-        self.tab3.pack(fill="both", expand=True)
+        self.tab3.pack(fill="both", expand=True, padx=10, pady=10)
         
         self.tab4 = SystemSettingsTab(self.tabs.add("Manage System"), self)
-        self.tab4.pack(fill="both", expand=True)
+        self.tab4.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.tab5 = GeneralLedgerTab(self.tabs.add("View Ledger"), self)
-        self.tab5.pack(fill="both", expand=True)
+        self.tab5.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.tab6 = InvoiceTrackerTab(self.tabs.add("Track Invoices"), self)
-        self.tab6.pack(fill="both", expand=True)
+        self.tab6.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.tab7 = BankReconciliationTab(self.tabs.add("Reconcile Accounts"), self)
-        self.tab7.pack(fill="both", expand=True)
+        self.tab7.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.mount_reset_control()
         self.refresh_reports()
@@ -138,7 +154,7 @@ class ModernAccountingApp(ctk.CTk):
             payload = [{"account_id": a1, "amount": val}, {"account_id": a2, "amount": -val}]
             
             engine.post_journal_transaction(self.current_profile_id, "2026-06-27", self.tab1.desc_entry.get(), payload)
-            self.tab1.status_label.configure(text="Transaction posted successfully", text_color="green")
+            self.tab1.status_label.configure(text="Transaction posted successfully", text_color=designs.COLOR_SUCCESS)
             self.invalidate_and_prime_cache()
                 
             self.tab1.amount_entry.delete(0, 'end')
@@ -147,7 +163,7 @@ class ModernAccountingApp(ctk.CTk):
             self.refresh_reports()
             self.refresh_system_health_status()
         except Exception as e:
-            self.tab1.status_label.configure(text=f"Error: {e}", text_color="red")
+            self.tab1.status_label.configure(text=f"Error: {e}", text_color=designs.COLOR_CRITICAL)
 
     def refresh_reports(self):
         data = engine.generate_report_string(self.current_profile_id, self.profile_menu.get())
@@ -155,10 +171,10 @@ class ModernAccountingApp(ctk.CTk):
         self.tab3.bi_box.insert("1.0", data)
 
     def mount_reset_control(self):
-        reset_frame = ctk.CTkFrame(self.tab4, fg_color="#2b2b2b", border_color="#8B0000", border_width=1)
+        reset_frame = ctk.CTkFrame(self.tab4, fg_color=designs.COLOR_CRITICAL_BG, border_color=designs.COLOR_CRITICAL, border_width=1, corner_radius=6)
         reset_frame.pack(fill="x", padx=20, pady=20, side="bottom")
-        ctk.CTkLabel(reset_frame, text="System Reset Settings", font=ctk.CTkFont(weight="bold", size=13), text_color="#ff6b6b").pack(anchor="w", padx=15, pady=8)
-        self.reset_btn = ctk.CTkButton(reset_frame, text="Reset Local Database", fg_color="#8B0000", hover_color="#550000", width=200, command=self.trigger_system_reset)
+        ctk.CTkLabel(reset_frame, text="CRITICAL DESTRUCTION PROTOCOL", font=ctk.CTkFont(family=designs.FONT_HUD_ALERT_TITLE[0], size=designs.FONT_HUD_ALERT_TITLE[1], weight=designs.FONT_HUD_ALERT_TITLE[2]), text_color=designs.COLOR_CRITICAL).pack(anchor="w", padx=15, pady=8)
+        self.reset_btn = ctk.CTkButton(reset_frame, text="WIPE SOFTWARE DATA", fg_color=designs.COLOR_CRITICAL_ALERT, hover_color=designs.COLOR_CRITICAL, text_color="#ffffff", font=ctk.CTkFont(weight="bold"), width=200, command=self.trigger_system_reset)
         self.reset_btn.pack(anchor="w", padx=15, pady=15)
 
     def trigger_system_reset(self):
@@ -182,35 +198,34 @@ class ModernAccountingApp(ctk.CTk):
         except Exception as e: messagebox.showerror("Error", f"Reset failed: {e}")
 
     def refresh_system_health_status(self):
-        """Queries the rules processor engine locally to update UI counters instantly."""
         self.detected_errors = AuditEngine.run_system_audit(self.current_profile_id)
         err_count = len(self.detected_errors)
         
         if err_count > 0:
-            self.error_icon_lbl.configure(text=f"⚠️ Errors found: {err_count}", text_color="#ff6b6b")
+            self.error_icon_lbl.configure(text=f"⚠️ METRIC ANOMALIES DETECTED: {err_count}", text_color=designs.COLOR_CRITICAL)
         else:
-            self.error_icon_lbl.configure(text="✅ No errors", text_color="#40ff40")
+            self.error_icon_lbl.configure(text="✅ CORE SYSTEM INTEGRITY: OPTIMAL", text_color=designs.COLOR_SUCCESS)
 
     def show_audit_console_popup(self):
-        """Shows the simple list window of what is currently wrong."""
         popup = ctk.CTkToplevel(self)
-        popup.title("Error Log List")
-        popup.geometry("550x380")
+        popup.title("System Integrity Console Log")
+        popup.geometry("600x400")
+        popup.configure(fg_color=designs.BG_WINDOW)
         popup.attributes("-topmost", True)
         
-        ctk.CTkLabel(popup, text="⚠️ Current Issues Found", font=ctk.CTkFont(weight="bold", size=14)).pack(pady=10)
+        ctk.CTkLabel(popup, text="CRITICAL SYSTEM METRIC AUDIT", font=ctk.CTkFont(family=designs.FONT_HUD_REGULAR[0], weight="bold", size=14), text_color=designs.COLOR_ACCENT).pack(pady=15)
         
-        log_view = ctk.CTkFrame(popup, fg_color="transparent")
+        log_view = ctk.CTkScrollableFrame(popup, fg_color=designs.BG_PANEL, border_color=designs.BORDER_COLOR, border_width=1)
         log_view.pack(fill="both", expand=True, padx=20, pady=10)
         
         if not self.detected_errors:
-            ctk.CTkLabel(log_view, text="Everything looks great! No issues found.", text_color="green", font=ctk.CTkFont(size=12)).pack(pady=50)
+            ctk.CTkLabel(log_view, text="No anomalies registered in workspace structures.", text_color=designs.COLOR_SUCCESS, font=ctk.CTkFont(family=designs.FONT_HUD_CONSOLE[0], size=13)).pack(pady=60)
             return
             
         for err in self.detected_errors:
             error_text = f"• [{err['type'].upper()}] Found in '{err['tab']}' tab:\n  {err['msg']}\n"
-            lbl = ctk.CTkLabel(log_view, text=error_text, font=ctk.CTkFont(size=12), text_color="#ff6b6b", justify="left", anchor="w", wraplength=500)
-            lbl.pack(fill="x", anchor="w", pady=5)
+            lbl = ctk.CTkLabel(log_view, text=error_text, font=ctk.CTkFont(family=designs.FONT_HUD_ALERT_BODY[0], size=designs.FONT_HUD_ALERT_BODY[1]), text_color=designs.COLOR_CRITICAL, justify="left", anchor="w", wraplength=520)
+            lbl.pack(fill="x", anchor="w", pady=6, padx=10)
 
     def add_profile(self):
         name = self.tab4.new_profile_entry.get().strip()
